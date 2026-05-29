@@ -5,15 +5,26 @@ import SwiftUI
 enum SidebarLayout {
     static var collapsedWidth: CGFloat { UIMetrics.sidebarCollapsedWidth }
     static var expandedWidth: CGFloat { UIMetrics.sidebarExpandedWidth }
+    static var minExpandedWidth: CGFloat { UIMetrics.sidebarExpandedMinWidth }
+    static var maxExpandedWidth: CGFloat { UIMetrics.sidebarExpandedMaxWidth }
     static var width: CGFloat { UIMetrics.sidebarCollapsedWidth }
+
+    static func clampExpandedWidth(_ value: CGFloat) -> CGFloat {
+        min(max(value, minExpandedWidth), maxExpandedWidth)
+    }
 
     static func resolvedWidth(
         expanded: Bool,
         collapsedStyle: SidebarCollapsedStyle,
-        expandedStyle: SidebarExpandedStyle
+        expandedStyle: SidebarExpandedStyle,
+        expandedCustomWidth: CGFloat? = nil
     ) -> CGFloat {
         if expanded {
-            return expandedStyle == .wide ? expandedWidth : collapsedWidth
+            guard expandedStyle == .wide else { return collapsedWidth }
+            if let expandedCustomWidth {
+                return clampExpandedWidth(expandedCustomWidth)
+            }
+            return expandedWidth
         }
         return collapsedStyle == .hidden ? 0 : collapsedWidth
     }
@@ -35,6 +46,7 @@ struct Sidebar: View {
     @State private var dragState = ProjectDragState()
     @State private var projectPendingRemoval: Project?
     let expanded: Bool
+    let expandedCustomWidth: CGFloat
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var expandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
 
@@ -64,7 +76,12 @@ struct Sidebar: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .frame(width: isHidden ? 0 : (isWide ? SidebarLayout.expandedWidth : SidebarLayout.collapsedWidth))
+        .frame(width: SidebarLayout.resolvedWidth(
+            expanded: expanded,
+            collapsedStyle: collapsedStyle,
+            expandedStyle: expandedStyle,
+            expandedCustomWidth: expandedCustomWidth
+        ))
         .opacity(isHidden ? 0 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sidebar")

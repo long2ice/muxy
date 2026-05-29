@@ -123,6 +123,7 @@ struct MainWindow: View {
     @State private var extensionOutputSelected: String?
     @AppStorage(SidebarCollapsedStyle.storageKey) private var sidebarCollapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var sidebarExpandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
+    @AppStorage("muxy.sidebarExpandedCustomWidth") private var sidebarExpandedCustomWidth: Double = .init(SidebarLayout.expandedWidth)
     @AppStorage("muxy.notifications.toastPosition") private var toastPositionRaw = ToastPosition.topCenter.rawValue
     @AppStorage(RecordingPreferences.autoSendKey) private var recordingAutoSend = RecordingPreferences.defaultAutoSend
     @AppStorage(RecordingPreferences.languageKey) private var recordingLanguage = RecordingPreferences.defaultLanguage
@@ -132,6 +133,9 @@ struct MainWindow: View {
     var body: some View {
         HStack(spacing: 0) {
             leftNavigationColumn
+            if sidebarIsResizable {
+                sidebarResizeHandle
+            }
             mainWorkspaceColumn
         }
         .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
@@ -291,13 +295,16 @@ struct MainWindow: View {
                     .accessibilityHidden(true)
             }
 
-            Sidebar(expanded: sidebarExpanded)
+            Sidebar(
+                expanded: sidebarExpanded,
+                expandedCustomWidth: CGFloat(sidebarExpandedCustomWidth)
+            )
         }
         .frame(width: leftNavigationWidth, alignment: .leading)
         .clipped()
         .background(MuxyTheme.bg)
         .overlay(alignment: .trailing) {
-            if leftNavigationWidth > 0 {
+            if leftNavigationWidth > 0, !sidebarIsResizable {
                 Rectangle().fill(MuxyTheme.border)
                     .frame(width: 1)
                     .padding(.top, leftNavigationBorderTopPadding)
@@ -305,7 +312,7 @@ struct MainWindow: View {
             }
         }
         .fixedSize(horizontal: true, vertical: false)
-        .animation(.easeInOut(duration: 0.2), value: leftNavigationWidth)
+        .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
     }
 
     private var mainWorkspaceColumn: some View {
@@ -333,7 +340,7 @@ struct MainWindow: View {
 
             topBarContent
         }
-        .animation(.easeInOut(duration: 0.2), value: mainTitleBarLeadingInset)
+        .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
     }
 
     @ViewBuilder
@@ -353,7 +360,7 @@ struct MainWindow: View {
                         }
                     }
                 }
-                .animation(.easeInOut(duration: 0.2), value: titleBarNavigationOverlayWidth)
+                .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
         }
     }
 
@@ -857,8 +864,13 @@ struct MainWindow: View {
         SidebarLayout.resolvedWidth(
             expanded: sidebarExpanded,
             collapsedStyle: sidebarCollapsedStyle,
-            expandedStyle: sidebarExpandedStyle
+            expandedStyle: sidebarExpandedStyle,
+            expandedCustomWidth: CGFloat(sidebarExpandedCustomWidth)
         )
+    }
+
+    private var sidebarIsResizable: Bool {
+        SidebarLayout.isWide(expanded: sidebarExpanded, expandedStyle: sidebarExpandedStyle)
     }
 
     private var leftNavigationWidth: CGFloat {
@@ -1033,24 +1045,22 @@ struct MainWindow: View {
             switch position {
             case .right:
                 HStack(spacing: 0) {
-                    sidePanelResizeHandle { delta in
-                        let next = richInputPanelWidth - Double(delta)
-                        richInputPanelWidth = max(
-                            Double(RichInputPanelLayout.minWidth),
-                            min(Double(RichInputPanelLayout.maxWidth), next)
-                        )
-                    }
+                    panelResize(
+                        axis: .horizontal,
+                        edge: .leading,
+                        value: $richInputPanelWidth,
+                        range: RichInputPanelLayout.minWidth ... RichInputPanelLayout.maxWidth
+                    )
                     panel.frame(width: CGFloat(richInputPanelWidth))
                 }
             case .bottom:
                 VStack(spacing: 0) {
-                    bottomPanelResizeHandle { delta in
-                        let next = richInputPanelHeight - Double(delta)
-                        richInputPanelHeight = max(
-                            Double(RichInputPanelLayout.minHeight),
-                            min(Double(RichInputPanelLayout.maxHeight), next)
-                        )
-                    }
+                    panelResize(
+                        axis: .vertical,
+                        edge: .top,
+                        value: $richInputPanelHeight,
+                        range: RichInputPanelLayout.minHeight ... RichInputPanelLayout.maxHeight
+                    )
                     panel.frame(height: CGFloat(richInputPanelHeight))
                 }
             }
@@ -1063,24 +1073,23 @@ struct MainWindow: View {
             richInputPanelContent(at: .right)
         } else if vcsPanelVisible, VCSDisplayMode.current == .attached, let state = activeVCSState {
             HStack(spacing: 0) {
-                sidePanelResizeHandle { delta in
-                    vcsPanelWidth = max(
-                        AttachedVCSLayout.minWidth,
-                        min(AttachedVCSLayout.maxWidth, vcsPanelWidth - delta)
-                    )
-                }
+                panelResize(
+                    axis: .horizontal,
+                    edge: .leading,
+                    value: $vcsPanelWidth,
+                    range: AttachedVCSLayout.minWidth ... AttachedVCSLayout.maxWidth
+                )
                 VCSTabView(state: state, focused: false, onFocus: {})
                     .frame(width: vcsPanelWidth)
             }
         } else if fileTreePanelVisible, let treeState = activeFileTreeState {
             HStack(spacing: 0) {
-                sidePanelResizeHandle { delta in
-                    let next = fileTreePanelWidth - Double(delta)
-                    fileTreePanelWidth = max(
-                        Double(FileTreeLayout.minWidth),
-                        min(Double(FileTreeLayout.maxWidth), next)
-                    )
-                }
+                panelResize(
+                    axis: .horizontal,
+                    edge: .leading,
+                    value: $fileTreePanelWidth,
+                    range: FileTreeLayout.minWidth ... FileTreeLayout.maxWidth
+                )
                 FileTreeView(
                     state: treeState,
                     onOpenFile: { filePath in
@@ -1105,18 +1114,30 @@ struct MainWindow: View {
         }
     }
 
-    private func sidePanelResizeHandle(onDrag: @escaping (CGFloat) -> Void) -> some View {
-        ResizeHandle(axis: .horizontal) { v in
-            onDrag(v.translation.width)
-        }
-        .accessibilityHidden(true)
+    private var sidebarResizeHandle: some View {
+        panelResize(
+            axis: .horizontal,
+            edge: .trailing,
+            value: $sidebarExpandedCustomWidth,
+            range: SidebarLayout.minExpandedWidth ... SidebarLayout.maxExpandedWidth
+        )
+        .padding(.top, leftNavigationBorderTopPadding)
     }
 
-    private func bottomPanelResizeHandle(onDrag: @escaping (CGFloat) -> Void) -> some View {
-        ResizeHandle(axis: .vertical) { v in
-            onDrag(v.translation.height)
-        }
-        .accessibilityHidden(true)
+    private func panelResize<V: BinaryFloatingPoint>(
+        axis: ResizeHandle.Axis,
+        edge: PanelResizeHandle.Edge,
+        value: Binding<V>,
+        range: ClosedRange<CGFloat>
+    ) -> some View {
+        PanelResizeHandle(
+            axis: axis,
+            edge: edge,
+            current: { CGFloat(value.wrappedValue) },
+            apply: { next in
+                value.wrappedValue = V(min(range.upperBound, max(range.lowerBound, next)))
+            }
+        )
     }
 
     private var activeFileTreeState: FileTreeState? {
