@@ -22,13 +22,9 @@ extension Bundle {
     static var providerIconsURL: URL? {
         var candidates: [URL] = []
 
-        if let resourceURL = Bundle.main.resourceURL {
+        if let resourceURL = appResources.resourceURL {
             candidates.append(resourceURL.appendingPathComponent("ProviderIcons"))
         }
-        candidates.append(contentsOf: [
-            Bundle.main.bundleURL.appendingPathComponent("ProviderIcons"),
-            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/ProviderIcons"),
-        ])
 
         for candidate in candidates {
             var isDirectory: ObjCBool = false
