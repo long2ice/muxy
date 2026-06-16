@@ -176,11 +176,13 @@ final class AppState {
     }
 
     func selectProject(_ project: Project, worktree: Worktree) {
+        let wasActive = activeProjectID == project.id
         dispatch(.selectProject(
             projectID: project.id,
             worktreeID: worktree.id,
             worktreePath: worktree.path
         ))
+        guard !wasActive else { return }
         onProjectSelected?(project.id)
     }
 

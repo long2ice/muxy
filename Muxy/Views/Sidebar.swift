@@ -232,17 +232,12 @@ struct Sidebar: View {
                 }
             }
         } else {
-            VStack(spacing: UIMetrics.spacing3) {
-                WorkspaceSwitcher(isWide: isWide)
-                if showSortMenu {
-                    sortMenu
-                }
-            }
+            WorkspaceSwitcher(isWide: isWide)
         }
     }
 
     private var showSortMenu: Bool {
-        !projectGroupStore.isRemoteWorkspaceActive && !displayedProjects.isEmpty
+        isWide && !projectGroupStore.isRemoteWorkspaceActive && !displayedProjects.isEmpty
     }
 
     private var projectList: some View {
@@ -570,10 +565,10 @@ private enum SortMenuButton {
             Image(systemName: "arrow.up.arrow.down")
                 .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
                 .foregroundStyle(hovered ? MuxyTheme.accent : MuxyTheme.fgMuted)
-                .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
+                .frame(width: UIMetrics.controlMedium, height: UIMetrics.controlMedium)
                 .background(
                     hovered ? MuxyTheme.hover : MuxyTheme.surface,
-                    in: RoundedRectangle(cornerRadius: UIMetrics.radiusSM)
+                    in: RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
                 )
                 .onHover { hovered = $0 }
                 .accessibilityLabel("Sort Projects")
