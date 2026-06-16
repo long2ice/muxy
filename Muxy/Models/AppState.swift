@@ -62,6 +62,7 @@ final class AppState {
     private let terminalViews: any TerminalViewRemoving
     private let workspacePersistence: any WorkspacePersisting
     var onProjectsEmptied: (([UUID]) -> Void)?
+    var onProjectSelected: ((UUID) -> Void)?
 
     var activeProjectID: UUID?
 
@@ -180,6 +181,7 @@ final class AppState {
             worktreeID: worktree.id,
             worktreePath: worktree.path
         ))
+        onProjectSelected?(project.id)
     }
 
     func selectWorktree(projectID: UUID, worktree: Worktree) {
