@@ -40,6 +40,13 @@ enum ProjectSortMode: String, CaseIterable, Identifiable {
     }
 
     func sorted(_ projects: [Project]) -> [Project] {
+        let ordered = ordered(projects)
+        let favorites = ordered.filter(\.isFavorite)
+        let rest = ordered.filter { !$0.isFavorite }
+        return favorites + rest
+    }
+
+    private func ordered(_ projects: [Project]) -> [Project] {
         switch self {
         case .manual:
             projects

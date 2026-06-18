@@ -52,6 +52,11 @@ struct TerminalOmniboxItemResolverTests {
         #expect(TerminalOmniboxItem.project(project).sectionTitle == "Projects")
         #expect(TerminalOmniboxItem.project(project).symbol == "folder")
         #expect(TerminalOmniboxItem.project(project).searchKey == "Muxy /repo/muxy project")
+        #expect(TerminalOmniboxItem.project(project).isFavorite == false)
+
+        let favorite = TerminalOmniboxProjectItem(projectID: projectID, name: "Muxy", path: "/repo/muxy", isFavorite: true)
+        #expect(TerminalOmniboxItem.project(favorite).isFavorite == true)
+        #expect(TerminalOmniboxItem.worktree(primaryWorktree).isFavorite == false)
 
         #expect(TerminalOmniboxItem.worktree(primaryWorktree).subtitle == "(main) /repo/muxy")
         #expect(TerminalOmniboxItem.worktree(primaryWorktree).symbol == "folder.badge.gearshape")

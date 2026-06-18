@@ -58,6 +58,12 @@ final class ProjectStore {
         save()
     }
 
+    func setFavorite(id: UUID, to favorite: Bool) {
+        guard let index = storedProjects.firstIndex(where: { $0.id == id }) else { return }
+        storedProjects[index].isFavorite = favorite
+        save()
+    }
+
     func setWorktreesEnabled(id: UUID, to enabled: Bool) {
         guard let index = storedProjects.firstIndex(where: { $0.id == id }) else { return }
         storedProjects[index].worktreesEnabled = enabled

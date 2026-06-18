@@ -13,6 +13,7 @@ struct ProjectRow: View {
     let onSetIcon: (String?) -> Void
     let onSetIconColor: (String?) -> Void
     let onSetWorktreesEnabled: (Bool) -> Void
+    let onSetFavorite: (Bool) -> Void
 
     @Environment(AppState.self) private var appState
     @Environment(WorktreeStore.self) private var worktreeStore
@@ -160,6 +161,12 @@ struct ProjectRow: View {
 
     @ViewBuilder
     private var projectContextMenu: some View {
+        if !project.isRemote {
+            Button(project.isFavorite ? "Unfavorite" : "Favorite", systemImage: project.isFavorite ? "star.slash" : "star") {
+                onSetFavorite(!project.isFavorite)
+            }
+            Divider()
+        }
         Button("Set Logo...") { pickLogoImage() }
         if project.logo != nil {
             Button("Remove Logo") { onSetLogo(nil) }
@@ -262,6 +269,12 @@ struct ProjectRow: View {
             RoundedRectangle(cornerRadius: UIMetrics.radiusMD + UIMetrics.scaled(3), style: .continuous)
                 .strokeBorder(isActive ? MuxyTheme.accent : .clear, lineWidth: 1.5)
                 .animation(.easeInOut(duration: 0.15), value: isActive)
+        }
+        .overlay(alignment: .bottomLeading) {
+            if project.isFavorite, !project.isHome {
+                FavoriteStarBadge()
+                    .offset(x: -UIMetrics.spacing1, y: UIMetrics.spacing1)
+            }
         }
         .overlay(alignment: .bottomTrailing) {
             if isRefreshingWorktrees {

@@ -283,11 +283,19 @@ private struct TerminalOmniboxRow: View {
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .frame(width: UIMetrics.iconLG, alignment: .center)
             VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
-                Text(item.title)
-                    .font(.system(size: UIMetrics.fontBody, weight: .medium))
-                    .foregroundStyle(MuxyTheme.fg)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: UIMetrics.spacing2) {
+                    if item.isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: UIMetrics.fontXS, weight: .semibold))
+                            .foregroundStyle(MuxyTheme.accent)
+                            .accessibilityLabel("Favorite")
+                    }
+                    Text(item.title)
+                        .font(.system(size: UIMetrics.fontBody, weight: .medium))
+                        .foregroundStyle(MuxyTheme.fg)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 if let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: UIMetrics.fontCaption))
