@@ -45,16 +45,27 @@ struct ProjectStoreTests {
         #expect(persistence.projects.first?.worktreesEnabled == true)
     }
 
-    @Test("setFavorite persists the new value")
-    func setFavorite() {
+    @Test("setPinned persists the new value")
+    func setPinned() {
         let project = Project(name: "Repo", path: "/tmp/repo")
         let persistence = ProjectPersistenceStub(initial: [project])
         let store = ProjectStore(persistence: persistence)
 
-        store.setFavorite(id: project.id, to: true)
+        store.setPinned(id: project.id, to: true)
 
-        #expect(store.storedProjects.first { $0.id == project.id }?.isFavorite == true)
-        #expect(persistence.projects.first?.isFavorite == true)
+        #expect(store.storedProjects.first { $0.id == project.id }?.isPinned == true)
+        #expect(persistence.projects.first?.isPinned == true)
+    }
+
+    @Test("setPinned ignores the Home project")
+    func setPinnedIgnoresHome() {
+        let project = Project(name: "Repo", path: "/tmp/repo")
+        let persistence = ProjectPersistenceStub(initial: [project])
+        let store = ProjectStore(persistence: persistence)
+
+        store.setPinned(id: Project.homeID, to: true)
+
+        #expect(store.storedProjects.allSatisfy { !$0.isPinned })
     }
 
     @Test("projects always exposes Home at the front without persisting it")

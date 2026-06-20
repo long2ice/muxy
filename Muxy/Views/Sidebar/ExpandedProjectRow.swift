@@ -13,7 +13,7 @@ struct ExpandedProjectRow: View {
     let onSetIcon: (String?) -> Void
     let onSetIconColor: (String?) -> Void
     let onSetWorktreesEnabled: (Bool) -> Void
-    let onSetFavorite: (Bool) -> Void
+    let onSetPinned: (Bool) -> Void
 
     @Environment(AppState.self) private var appState
     @Environment(WorktreeStore.self) private var worktreeStore
@@ -175,23 +175,15 @@ struct ExpandedProjectRow: View {
             iconOrBadge
 
             VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
-                HStack(spacing: UIMetrics.spacing2) {
-                    if project.isFavorite, !project.isHome {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: UIMetrics.fontXS, weight: .semibold))
-                            .foregroundStyle(MuxyTheme.accent)
-                            .accessibilityLabel("Favorite")
-                    }
-                    Text(project.name)
-                        .font(.system(size: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium))
-                        .foregroundStyle(MuxyTheme.fg)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .helpIfTruncated(
-                            project.name,
-                            font: .systemFont(ofSize: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium)
-                        )
-                }
+                Text(project.name)
+                    .font(.system(size: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(MuxyTheme.fg)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .helpIfTruncated(
+                        project.name,
+                        font: .systemFont(ofSize: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium)
+                    )
 
                 if hasWorktreeUI, let worktree = activeWorktree {
                     Text(worktree.isPrimary ? "primary" : worktree.name)
@@ -384,9 +376,9 @@ struct ExpandedProjectRow: View {
 
     @ViewBuilder
     private var projectContextMenu: some View {
-        if !project.isRemote {
-            Button(project.isFavorite ? "Unfavorite" : "Favorite", systemImage: project.isFavorite ? "star.slash" : "star") {
-                onSetFavorite(!project.isFavorite)
+        if !project.isRemote, !project.isHome {
+            Button(project.isPinned ? "Unpin" : "Pin") {
+                onSetPinned(!project.isPinned)
             }
             Divider()
         }

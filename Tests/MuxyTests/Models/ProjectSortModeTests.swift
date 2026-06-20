@@ -5,11 +5,11 @@ import Testing
 
 @Suite("ProjectSortMode")
 struct ProjectSortModeTests {
-    private func project(_ name: String, sortOrder: Int = 0, createdAt: Date = Date(), lastActiveAt: Date? = nil, isFavorite: Bool = false) -> Project {
+    private func project(_ name: String, sortOrder: Int = 0, createdAt: Date = Date(), lastActiveAt: Date? = nil, isPinned: Bool = false) -> Project {
         var project = Project(name: name, path: "/tmp/\(name)", sortOrder: sortOrder)
         project.createdAt = createdAt
         project.lastActiveAt = lastActiveAt
-        project.isFavorite = isFavorite
+        project.isPinned = isPinned
         return project
     }
 
@@ -57,22 +57,22 @@ struct ProjectSortModeTests {
         #expect(ProjectSortMode.dateCreated.sorted(input).map(\.name) == ["Older", "Newer"])
     }
 
-    @Test("favorites are pinned ahead of non-favorites in every mode")
-    func favoritesPinnedFirst() {
+    @Test("pinned projects are placed ahead of unpinned in every mode")
+    func pinnedFirst() {
         let input = [
             project("Apple", sortOrder: 0),
-            project("Zebra", sortOrder: 1, isFavorite: true),
+            project("Zebra", sortOrder: 1, isPinned: true),
             project("Mango", sortOrder: 2),
         ]
         #expect(ProjectSortMode.manual.sorted(input).map(\.name) == ["Zebra", "Apple", "Mango"])
         #expect(ProjectSortMode.nameAscending.sorted(input).map(\.name) == ["Zebra", "Apple", "Mango"])
     }
 
-    @Test("favorites keep the chosen mode order among themselves")
-    func favoritesPreserveModeOrder() {
+    @Test("pinned projects keep the chosen mode order among themselves")
+    func pinnedPreserveModeOrder() {
         let input = [
-            project("Bravo", isFavorite: true),
-            project("Alpha", isFavorite: true),
+            project("Bravo", isPinned: true),
+            project("Alpha", isPinned: true),
             project("Charlie"),
         ]
         #expect(ProjectSortMode.nameAscending.sorted(input).map(\.name) == ["Alpha", "Bravo", "Charlie"])

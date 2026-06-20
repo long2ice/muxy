@@ -58,9 +58,9 @@ final class ProjectStore {
         save()
     }
 
-    func setFavorite(id: UUID, to favorite: Bool) {
+    func setPinned(id: UUID, to pinned: Bool) {
         guard let index = storedProjects.firstIndex(where: { $0.id == id }) else { return }
-        storedProjects[index].isFavorite = favorite
+        storedProjects[index].isPinned = pinned
         save()
     }
 

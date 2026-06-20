@@ -41,9 +41,9 @@ enum ProjectSortMode: String, CaseIterable, Identifiable {
 
     func sorted(_ projects: [Project]) -> [Project] {
         let ordered = ordered(projects)
-        let favorites = ordered.filter(\.isFavorite)
-        let rest = ordered.filter { !$0.isFavorite }
-        return favorites + rest
+        let pinned = ordered.filter(\.isPinned)
+        let rest = ordered.filter { !$0.isPinned }
+        return pinned + rest
     }
 
     private func ordered(_ projects: [Project]) -> [Project] {

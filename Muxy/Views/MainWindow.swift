@@ -675,7 +675,7 @@ struct MainWindow: View {
 
     private var terminalOmniboxProjects: [TerminalOmniboxProjectItem] {
         omniboxProjects.map {
-            TerminalOmniboxProjectItem(projectID: $0.id, name: $0.name, path: $0.path, isFavorite: $0.isFavorite)
+            TerminalOmniboxProjectItem(projectID: $0.id, name: $0.name, path: $0.path)
         }
     }
 

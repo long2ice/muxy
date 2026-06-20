@@ -28,7 +28,6 @@ struct TerminalOmniboxProjectItem: Identifiable, Equatable {
     let projectID: UUID
     let name: String
     let path: String
-    var isFavorite = false
 
     var id: String { "project-\(projectID.uuidString)" }
 
@@ -169,11 +168,6 @@ enum TerminalOmniboxItem: Identifiable, Equatable {
         case .extensionCommand:
             "puzzlepiece.extension"
         }
-    }
-
-    var isFavorite: Bool {
-        guard case let .project(project) = self else { return false }
-        return project.isFavorite
     }
 
     var searchKey: String {
