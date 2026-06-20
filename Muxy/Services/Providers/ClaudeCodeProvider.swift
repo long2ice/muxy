@@ -20,33 +20,24 @@ struct ClaudeCodeProvider: AIProviderIntegration {
         return paths.contains { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    static let hookEvents: [(settingsKey: String, event: String)] = [
+        ("Stop", "stop"),
+        ("Notification", "notification"),
+        ("UserPromptSubmit", "user-prompt-submit"),
+        ("PreToolUse", "pre-tool-use"),
+    ]
+
     func install(hookScriptPath: String) throws {
         let settings = try Self.readSettings()
         let hooks = settings["hooks"] as? [String: Any] ?? [:]
 
-        let stopCommand = Self.hookCommand(hookScript: hookScriptPath, event: "stop")
-        let notificationCommand = Self.hookCommand(hookScript: hookScriptPath, event: "notification")
+        let commands = Self.hookEvents.map {
+            (settingsKey: $0.settingsKey, command: Self.hookCommand(hookScript: hookScriptPath, event: $0.event))
+        }
 
-        let stopMatches = Self.muxyHookMatches(entries: hooks["Stop"] as? [[String: Any]], expectedCommand: stopCommand)
-        let notificationMatches = Self.muxyHookMatches(
-            entries: hooks["Notification"] as? [[String: Any]],
-            expectedCommand: notificationCommand
-        )
-
-        guard !stopMatches || !notificationMatches else { return }
+        guard let updatedHooks = Self.hooks(installing: commands, into: hooks) else { return }
 
         var updatedSettings = settings
-        var updatedHooks = hooks
-
-        let stopHook = Self.buildHookEntry(command: stopCommand)
-        let notificationHook = Self.buildHookEntry(command: notificationCommand)
-
-        updatedHooks["Stop"] = Self.mergeHookArray(existing: hooks["Stop"] as? [[String: Any]], muxyHook: stopHook)
-        updatedHooks["Notification"] = Self.mergeHookArray(
-            existing: hooks["Notification"] as? [[String: Any]],
-            muxyHook: notificationHook
-        )
-
         updatedSettings["hooks"] = updatedHooks
         try Self.writeSettings(updatedSettings)
     }
@@ -54,23 +45,46 @@ struct ClaudeCodeProvider: AIProviderIntegration {
     func uninstall() throws {
         guard FileManager.default.fileExists(atPath: Self.settingsPath) else { return }
         var settings = try Self.readSettings()
-        guard var hooks = settings["hooks"] as? [String: Any] else { return }
+        guard let hooks = settings["hooks"] as? [String: Any] else { return }
 
-        for key in ["Stop", "Notification"] {
-            guard var entries = hooks[key] as? [[String: Any]] else { continue }
-            entries.removeAll { Self.isMuxyHookEntry($0) }
-            if entries.isEmpty {
-                hooks.removeValue(forKey: key)
-            } else {
-                hooks[key] = entries
-            }
-        }
-
-        settings["hooks"] = hooks
+        settings["hooks"] = Self.hooks(uninstallingFrom: hooks)
         try Self.writeSettings(settings)
     }
 
-    private static func hookCommand(hookScript: String, event: String) -> String {
+    static func hooks(
+        installing commands: [(settingsKey: String, command: String)],
+        into hooks: [String: Any]
+    ) -> [String: Any]? {
+        let alreadyInstalled = commands.allSatisfy {
+            muxyHookMatches(entries: hooks[$0.settingsKey] as? [[String: Any]], expectedCommand: $0.command)
+        }
+        guard !alreadyInstalled else { return nil }
+
+        var updatedHooks = hooks
+        for entry in commands {
+            updatedHooks[entry.settingsKey] = mergeHookArray(
+                existing: hooks[entry.settingsKey] as? [[String: Any]],
+                muxyHook: buildHookEntry(command: entry.command)
+            )
+        }
+        return updatedHooks
+    }
+
+    static func hooks(uninstallingFrom hooks: [String: Any]) -> [String: Any] {
+        var result = hooks
+        for key in hookEvents.map(\.settingsKey) {
+            guard var entries = result[key] as? [[String: Any]] else { continue }
+            entries.removeAll { isMuxyHookEntry($0) }
+            if entries.isEmpty {
+                result.removeValue(forKey: key)
+            } else {
+                result[key] = entries
+            }
+        }
+        return result
+    }
+
+    static func hookCommand(hookScript: String, event: String) -> String {
         "'\(hookScript)' \(event) # \(muxyMarker)"
     }
 
