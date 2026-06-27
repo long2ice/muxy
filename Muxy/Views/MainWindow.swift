@@ -80,6 +80,9 @@ struct MainWindow: View {
     @State private var overlayAnimatingOut = false
     @State private var isFullScreen = false
     @AppStorage("muxy.sidebarExpanded") private var sidebarExpanded = false
+    @State private var layoutStore = AppLayoutStore.shared
+    @State private var extensionStore = ExtensionStore.shared
+    @AppStorage(SidebarSelection.storageKey) private var activeSidebarRaw = SidebarSelection.builtinValue
     @AppStorage("muxy.showStatusBar") private var showStatusBar = true
     @AppStorage(HomeProjectPreferences.visibleKey) private var showHomeProject = HomeProjectPreferences.defaultVisible
     @AppStorage("muxy.extensionOutputSelected") private var extensionOutputSelectedStored = ""
@@ -95,15 +98,18 @@ struct MainWindow: View {
     @State private var voiceRecording = VoiceRecordingState.shared
     @MainActor private var trafficLightWidth: CGFloat { UIMetrics.scaled(75) }
 
+    private var layout: any AppLayoutProviding { layoutStore.provider }
+    private var isTabFocused: Bool { layoutStore.layout == .tabFocused && !isExtensionSidebarActive }
+
+    private var showsBreadcrumb: Bool { layout.topbar == .breadcrumb && !isExtensionSidebarActive }
+
     var body: some View {
         HStack(spacing: 0) {
-            leftNavigationColumn
-            if sidebarIsResizable {
-                sidebarResizeHandle
-            }
+            sidebarColumn
             mainWorkspaceColumn
         }
         .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
+        .animation(.easeInOut(duration: 0.2), value: layoutStore.layout)
         .overlay(alignment: .topLeading) {
             titleBarNavigationOverlay
         }
@@ -210,6 +216,11 @@ struct MainWindow: View {
                 sidebarExpanded.toggle()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLayout)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                layoutStore.toggle()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleExtensionConsole)) { _ in
             panelHost.toggle(BuiltinPanel.extensionConsole, at: .bottom, mode: .floating)
         }
@@ -248,7 +259,7 @@ struct MainWindow: View {
         .modifier(SentryConsentPrompter())
     }
 
-    private var leftNavigationColumn: some View {
+    private var sidebarColumn: some View {
         VStack(spacing: 0) {
             if !isFullScreen {
                 Color.clear
@@ -259,24 +270,62 @@ struct MainWindow: View {
                     .accessibilityHidden(true)
             }
 
-            Sidebar(
-                expanded: sidebarExpanded,
-                expandedCustomWidth: CGFloat(sidebarExpandedCustomWidth)
-            )
+            sidebarContent
         }
         .frame(width: leftNavigationWidth, alignment: .leading)
         .clipped()
         .background(MuxyTheme.bg)
         .overlay(alignment: .trailing) {
-            if leftNavigationWidth > 0, !sidebarIsResizable {
+            if sidebarIsResizable {
+                sidebarResizeHandle
+            } else {
                 Rectangle().fill(MuxyTheme.border)
                     .frame(width: 1)
                     .padding(.top, leftNavigationBorderTopPadding)
+                    .opacity(sidebarBorderVisible ? 1 : 0)
                     .accessibilityHidden(true)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
         .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
+    }
+
+    private var activeExtensionSidebarID: String? {
+        SidebarSelection.resolvedExtensionID(from: activeSidebarRaw, store: extensionStore)
+    }
+
+    private var awaitingExtensionSidebar: Bool {
+        activeSidebarRaw != SidebarSelection.builtinValue && !extensionStore.hasLoadedFromDisk
+    }
+
+    private var isExtensionSidebarActive: Bool {
+        activeExtensionSidebarID != nil || awaitingExtensionSidebar
+    }
+
+    @ViewBuilder
+    private var sidebarContent: some View {
+        if let activeExtensionSidebarID {
+            ExtensionSidebarView(extensionID: activeExtensionSidebarID)
+        } else if awaitingExtensionSidebar {
+            Color.clear
+        } else {
+            ForEach(layout.sidebars) { sidebar in
+                sidebarView(for: sidebar)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sidebarView(for sidebar: LayoutSidebar) -> some View {
+        switch sidebar {
+        case .tabList:
+            TabFocusedSidebar()
+        case .projectList:
+            ProjectFocusedSidebar(
+                expanded: sidebarExpanded,
+                expandedCustomWidth: CGFloat(sidebarExpandedCustomWidth)
+            )
+        }
     }
 
     private var mainWorkspaceColumn: some View {
@@ -303,6 +352,11 @@ struct MainWindow: View {
             }
 
             topBarContent
+                .overlay(alignment: .leading) {
+                    if showsBreadcrumb {
+                        TabFocusedBreadcrumb()
+                    }
+                }
         }
         .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
     }
@@ -316,12 +370,13 @@ struct MainWindow: View {
                 .background(WindowDragRepresentable())
                 .background(MuxyTheme.bg)
                 .overlay(alignment: .trailing) {
-                    HStack(spacing: 0) {
-                        navigationArrows
-                        if titleBarNavigationOverflowsSidebar {
-                            Rectangle().fill(MuxyTheme.border).frame(width: 1)
-                                .accessibilityHidden(true)
-                        }
+                    navigationArrows
+                        .padding(.trailing, UIMetrics.spacing4)
+                }
+                .overlay(alignment: .trailing) {
+                    if titleBarNavigationOverlayWidth > 0 {
+                        Rectangle().fill(MuxyTheme.border).frame(width: 1)
+                            .accessibilityHidden(true)
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: sidebarExpanded)
@@ -415,8 +470,15 @@ struct MainWindow: View {
             ) {
                 appState.goForward()
             }
+            if !isExtensionSidebarActive {
+                NavigationArrowButton(
+                    symbol: isTabFocused ? "sidebar.squares.left" : "sidebar.left",
+                    label: isTabFocused ? "Switch to Project Focused Layout" : "Switch to Tab Focused Layout"
+                ) {
+                    NotificationCenter.default.post(name: .toggleAppLayout, object: nil)
+                }
+            }
         }
-        .padding(.trailing, UIMetrics.spacing2)
     }
 
     @ViewBuilder
@@ -427,7 +489,7 @@ struct MainWindow: View {
         {
             PaneTabStrip(
                 areaID: area.id,
-                tabs: PaneTabStrip.snapshots(from: area.tabs),
+                tabs: showsBreadcrumb ? [] : PaneTabStrip.snapshots(from: area.tabs),
                 activeTabID: area.activeTabID,
                 isFocused: true,
                 isWindowTitleBar: true,
@@ -503,7 +565,7 @@ struct MainWindow: View {
             WindowDragRepresentable(alwaysEnabled: true)
                 .overlay {
                     HStack {
-                        if let project = activeProject {
+                        if let project = activeProject, !showsBreadcrumb {
                             Text(project.name)
                                 .font(.system(size: UIMetrics.fontBody, weight: .semibold))
                                 .foregroundStyle(MuxyTheme.fgMuted)
@@ -868,11 +930,13 @@ struct MainWindow: View {
     }
 
     private var sidebarCollapsedStyle: SidebarCollapsedStyle {
-        SidebarCollapsedStyle(rawValue: sidebarCollapsedStyleRaw) ?? .defaultValue
+        guard !isTabFocused else { return .hidden }
+        return SidebarCollapsedStyle(rawValue: sidebarCollapsedStyleRaw) ?? .defaultValue
     }
 
     private var sidebarExpandedStyle: SidebarExpandedStyle {
-        SidebarExpandedStyle(rawValue: sidebarExpandedStyleRaw) ?? .defaultValue
+        guard !isTabFocused else { return .wide }
+        return SidebarExpandedStyle(rawValue: sidebarExpandedStyleRaw) ?? .defaultValue
     }
 
     private var sidebarResolvedWidth: CGFloat {
@@ -886,6 +950,10 @@ struct MainWindow: View {
 
     private var sidebarIsResizable: Bool {
         SidebarLayout.isWide(expanded: sidebarExpanded, expandedStyle: sidebarExpandedStyle)
+    }
+
+    private var sidebarBorderVisible: Bool {
+        leftNavigationWidth > 0
     }
 
     private var leftNavigationWidth: CGFloat {
@@ -920,7 +988,7 @@ struct MainWindow: View {
         trafficLightWidth + navigationArrowsWidth
     }
 
-    private var navigationArrowsWidth: CGFloat { UIMetrics.scaled(52) }
+    private var navigationArrowsWidth: CGFloat { UIMetrics.scaled(78) }
 
     private var devModeBadge: some View {
         DebugButton()
@@ -1450,7 +1518,7 @@ private struct TabCloseConfirmationObserver: ViewModifier {
 
 private struct NavigationArrowButton: View {
     let symbol: String
-    let isEnabled: Bool
+    var isEnabled = true
     let label: String
     let action: () -> Void
     @State private var hovered = false

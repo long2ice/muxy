@@ -38,7 +38,7 @@ enum SidebarLayout {
     }
 }
 
-struct Sidebar: View {
+struct ProjectFocusedSidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(ProjectStore.self) private var projectStore
     @Environment(ProjectGroupStore.self) private var projectGroupStore
@@ -47,22 +47,12 @@ struct Sidebar: View {
     @State private var dragState = ProjectDragState()
     @State private var isExternalDropTargeted = false
     @State private var projectPendingRemoval: Project?
-    @State private var extensionStore = ExtensionStore.shared
     let expanded: Bool
     let expandedCustomWidth: CGFloat
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var expandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
     @AppStorage(HomeProjectPreferences.visibleKey) private var showHomeProject = HomeProjectPreferences.defaultVisible
-    @AppStorage(SidebarSelection.storageKey) private var activeSidebarRaw = SidebarSelection.builtinValue
     @AppStorage(ProjectSortMode.storageKey) private var sortModeRaw = ProjectSortMode.defaultValue.rawValue
-
-    private var activeExtensionSidebarID: String? {
-        SidebarSelection.resolvedExtensionID(from: activeSidebarRaw, store: extensionStore)
-    }
-
-    private var awaitingExtensionSidebar: Bool {
-        activeSidebarRaw != SidebarSelection.builtinValue && !extensionStore.hasLoadedFromDisk
-    }
 
     private var collapsedStyle: SidebarCollapsedStyle {
         SidebarCollapsedStyle(rawValue: collapsedStyleRaw) ?? .defaultValue
@@ -111,20 +101,14 @@ struct Sidebar: View {
             }
     }
 
-    @ViewBuilder private var sidebarContent: some View {
-        if let activeExtensionSidebarID {
-            ExtensionSidebarView(extensionID: activeExtensionSidebarID)
-        } else if awaitingExtensionSidebar {
-            Color.clear
-        } else {
-            VStack(spacing: 0) {
-                projectList
-                    .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
-                    .clipped()
+    private var sidebarContent: some View {
+        VStack(spacing: 0) {
+            projectList
+                .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
+                .clipped()
 
-                SidebarFooter(isWide: isWide, sidebarExpanded: expanded)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            SidebarFooter(isWide: isWide, sidebarExpanded: expanded)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -592,109 +576,5 @@ private enum SortMenuButton {
                 .onHover { hovered = $0 }
                 .accessibilityLabel("Sort Projects")
         }
-    }
-}
-
-struct SidebarFooter: View {
-    var isWide = false
-    var sidebarExpanded = false
-    @State private var showThemePicker = false
-    @State private var showNotifications = false
-    @State private var extensionStore = ExtensionStore.shared
-
-    private var notificationStore: NotificationStore { NotificationStore.shared }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if isWide {
-                expandedFooter
-            } else {
-                collapsedFooter
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleThemePicker)) { _ in
-            showThemePicker.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationPanel)) { _ in
-            showNotifications.toggle()
-        }
-    }
-
-    private func postToggleSidebar() {
-        NotificationCenter.default.post(name: .toggleSidebar, object: nil)
-    }
-
-    private var sidebarToggleLabel: String {
-        sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"
-    }
-
-    private var sidebarToggleIcon: String {
-        "sidebar.left"
-    }
-
-    private var notificationBellIcon: String {
-        notificationStore.unreadCount > 0 ? "bell.badge" : "bell"
-    }
-
-    private func openExtensions() {
-        NotificationCenter.default.post(name: .openExtensionsModal, object: nil)
-    }
-
-    private var extensionsHelp: String {
-        guard extensionStore.hasUpdates else { return "Extensions" }
-        let count = extensionStore.updateCount
-        return count == 1 ? "Extensions (1 update available)" : "Extensions (\(count) updates available)"
-    }
-
-    private var extensionsAccessibilityLabel: String {
-        extensionStore.hasUpdates ? "Extensions, updates available" : "Extensions"
-    }
-
-    private var collapsedFooter: some View {
-        VStack(spacing: UIMetrics.spacing2) {
-            IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                .help("Notifications")
-                .popover(isPresented: $showNotifications) {
-                    NotificationPanel(onDismiss: { showNotifications = false })
-                }
-            IconButton(
-                symbol: "puzzlepiece.extension",
-                showsBadge: extensionStore.hasUpdates,
-                accessibilityLabel: extensionsAccessibilityLabel
-            ) { openExtensions() }
-                .help(extensionsHelp)
-            IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
-            IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
-        }
-        .padding(.bottom, UIMetrics.spacing4)
-    }
-
-    private var expandedFooter: some View {
-        HStack(spacing: UIMetrics.spacing2) {
-            IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
-
-            Spacer()
-
-            IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                .help("Notifications")
-                .popover(isPresented: $showNotifications) {
-                    NotificationPanel(onDismiss: { showNotifications = false })
-                }
-            IconButton(
-                symbol: "puzzlepiece.extension",
-                showsBadge: extensionStore.hasUpdates,
-                accessibilityLabel: extensionsAccessibilityLabel
-            ) { openExtensions() }
-                .help(extensionsHelp)
-            IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
-        }
-        .padding(.horizontal, UIMetrics.spacing5)
-        .padding(.bottom, UIMetrics.spacing4)
     }
 }
