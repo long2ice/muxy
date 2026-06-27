@@ -452,7 +452,7 @@ struct ExpandedProjectRow: View {
     }
 
     private var headerBackground: AnyShapeStyle {
-        if isActive { return AnyShapeStyle(MuxyTheme.accentSoft) }
+        if isActive { return AnyShapeStyle(MuxyTheme.surface) }
         if hovered { return AnyShapeStyle(MuxyTheme.hover) }
         return AnyShapeStyle(Color.clear)
     }
