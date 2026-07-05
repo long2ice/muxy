@@ -30,6 +30,23 @@ struct MuxyCommands: Commands {
             ?? project.path
     }
 
+    private var canCreateWorktreeForActiveProject: Bool {
+        WorktreeActionEligibility.canCreateWorktree(
+            project: activeProject,
+            worktreeStore: worktreeStore,
+            projectGroupStore: projectGroupStore,
+            allowUnknownGitStatus: true
+        )
+    }
+
+    private var canRemoveCurrentWorktree: Bool {
+        WorktreeActionEligibility.removableCurrentWorktree(
+            project: activeProject,
+            appState: appState,
+            worktreeStore: worktreeStore
+        ) != nil
+    }
+
     private var shortcutDispatcher: ShortcutActionDispatcher {
         ShortcutActionDispatcher(
             appState: appState,
@@ -96,6 +113,24 @@ struct MuxyCommands: Commands {
             }
             .shortcut(for: .refreshWorktrees, store: keyBindings)
             .disabled(activeProject == nil)
+
+            Button {
+                guard isMainWindowFocused else { return }
+                performShortcutAction(.createWorktree)
+            } label: {
+                Label("New Worktree", systemImage: "plus")
+            }
+            .shortcut(for: .createWorktree, store: keyBindings)
+            .disabled(!canCreateWorktreeForActiveProject)
+
+            Button {
+                guard isMainWindowFocused else { return }
+                performShortcutAction(.removeCurrentWorktree)
+            } label: {
+                Label("Remove Current Worktree", systemImage: "trash")
+            }
+            .shortcut(for: .removeCurrentWorktree, store: keyBindings)
+            .disabled(!canRemoveCurrentWorktree)
 
             Divider()
 
