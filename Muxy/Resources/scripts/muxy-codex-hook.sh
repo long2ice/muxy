@@ -6,7 +6,6 @@ if [ -z "${MUXY_SOCKET_PATH:-}" ] || [ -z "${MUXY_PANE_ID:-}" ]; then
 fi
 
 event="${1:-}"
-input=$(cat)
 
 send_notification() {
     local type="$1"
@@ -23,6 +22,7 @@ send_status() {
 }
 
 extract_last_message() {
+    local input="$1"
     local msg=""
     msg=$(printf '%s' "$input" | grep -o '"last_assistant_message":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [ -n "$msg" ]; then
@@ -33,13 +33,21 @@ extract_last_message() {
 }
 
 case "$event" in
-    notification)
-        send_status "waiting"
+    user-prompt-submit | pre-tool-use | UserPromptSubmit | PreToolUse)
+        cat >/dev/null
+        send_status "working"
+        ;;
+    permission-request | PermissionRequest)
+        cat >/dev/null
         send_notification "codex_hook" "Codex" "Needs attention"
         ;;
-    stop)
+    stop | Stop)
+        input=$(cat)
         send_status "idle"
-        body=$(extract_last_message)
+        body=$(extract_last_message "$input")
         send_notification "codex_hook" "Codex" "$body"
+        ;;
+    *)
+        cat >/dev/null
         ;;
 esac

@@ -118,6 +118,63 @@ struct MuxyNotificationHooksTests {
         }
     }
 
+    @Test("Codex hook reports working and idle statuses")
+    func codexHookReportsStatuses() throws {
+        let workingPrompt = try Self.runShellHook(.init(
+            scriptName: "muxy-codex-hook.sh",
+            event: "user-prompt-submit",
+            input: "{}"
+        ))
+        let workingTool = try Self.runShellHook(.init(
+            scriptName: "muxy-codex-hook.sh",
+            event: "pre-tool-use",
+            input: "{}"
+        ))
+        let attention = try Self.runShellHook(.init(
+            scriptName: "muxy-codex-hook.sh",
+            event: "permission-request",
+            input: "{}"
+        ))
+        let idle = try Self.runShellHook(.init(
+            scriptName: "muxy-codex-hook.sh",
+            event: "stop",
+            input: "{}"
+        ))
+
+        #expect(workingPrompt.contains("agent_status|codex_hook|\(Self.paneID)|working\n"))
+        #expect(workingTool.contains("agent_status|codex_hook|\(Self.paneID)|working\n"))
+        #expect(!attention.contains("agent_status|codex_hook|\(Self.paneID)|waiting\n"))
+        #expect(attention.contains("codex_hook|\(Self.paneID)|Codex|Needs attention\n"))
+        #expect(idle.contains("agent_status|codex_hook|\(Self.paneID)|idle\n"))
+        #expect(idle.contains("codex_hook|\(Self.paneID)|Codex|Session completed\n"))
+    }
+
+    @Test("Codex hook drains non-stop input before socket writes")
+    func codexHookDrainsInputBeforeSocketWrites() throws {
+        let contents = try String(
+            contentsOf: Self.repositoryRoot
+                .appendingPathComponent("Muxy/Resources/scripts/muxy-codex-hook.sh"),
+            encoding: .utf8
+        )
+        let workingBranch = try Self.branchBody(in: contents, startingAt: "user-prompt-submit")
+        let permissionBranch = try Self.branchBody(in: contents, startingAt: "permission-request")
+
+        #expect(try Self.offset(of: "cat >/dev/null", in: workingBranch) < Self.offset(of: "send_status", in: workingBranch))
+        #expect(try Self.offset(of: "cat >/dev/null", in: permissionBranch) < Self.offset(of: "send_notification", in: permissionBranch))
+        #expect(!permissionBranch.contains("send_status"))
+    }
+
+    @Test("Codex session start hook event does not report working")
+    func codexSessionStartDoesNotReportWorking() throws {
+        let sessionStart = try Self.runShellHook(.init(
+            scriptName: "muxy-codex-hook.sh",
+            event: "session-start",
+            input: "{}"
+        ))
+
+        #expect(sessionStart.isEmpty)
+    }
+
     private func temporaryBundle() throws -> URL {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("muxy-test-bundle-\(UUID().uuidString)")
@@ -255,6 +312,17 @@ struct MuxyNotificationHooksTests {
             data.append(buffer, count: count)
         }
         return data
+    }
+
+    private static func branchBody(in contents: String, startingAt marker: String) throws -> Substring {
+        let start = try #require(contents.range(of: marker)?.lowerBound)
+        let end = try #require(contents[start...].range(of: "\n        ;;")?.lowerBound)
+        return contents[start..<end]
+    }
+
+    private static func offset(of needle: String, in haystack: Substring) throws -> Int {
+        let range = try #require(haystack.range(of: needle))
+        return haystack.distance(from: haystack.startIndex, to: range.lowerBound)
     }
 
     private static func waitForProcess(_ process: Process) throws {

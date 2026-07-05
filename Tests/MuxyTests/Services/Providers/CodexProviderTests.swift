@@ -56,8 +56,8 @@ struct CodexProviderTests {
         #expect(!fixture.provider().isToolInstalled())
     }
 
-    @Test("install writes supported Stop hook and preserves colocated legacy user hook")
-    func installWritesSupportedStopHookAndPreservesColocatedLegacyUserHook() throws {
+    @Test("install writes supported hooks and preserves colocated legacy user hook")
+    func installWritesSupportedHooksAndPreservesColocatedLegacyUserHook() throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }
 
@@ -83,10 +83,40 @@ struct CodexProviderTests {
         try fixture.provider().install(hookScriptPath: "/tmp/muxy-codex-hook.sh")
         let settings = try fixture.readSettings()
 
+        #expect(Self.commands(in: settings, event: "UserPromptSubmit") == [
+            "'/tmp/muxy-codex-hook.sh' user-prompt-submit # muxy-notification-hook",
+        ])
+        #expect(Self.commands(in: settings, event: "PreToolUse") == [
+            "'/tmp/muxy-codex-hook.sh' pre-tool-use # muxy-notification-hook",
+        ])
+        #expect(Self.commands(in: settings, event: "PermissionRequest") == [
+            "'/tmp/muxy-codex-hook.sh' permission-request # muxy-notification-hook",
+        ])
         #expect(Self.commands(in: settings, event: "Stop") == [
             "'/tmp/muxy-codex-hook.sh' stop # muxy-notification-hook",
         ])
+        for event in ["UserPromptSubmit", "PreToolUse", "PermissionRequest", "Stop"] {
+            #expect(Self.timeouts(in: settings, event: event) == [10])
+        }
+        #expect(Self.commands(in: settings, event: "SessionStart").isEmpty)
         #expect(Self.commands(in: settings, event: "Notification") == ["/usr/bin/true"])
+    }
+
+    @Test("installing again is idempotent")
+    func installIsIdempotent() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+
+        try fixture.provider().install(hookScriptPath: "/tmp/muxy-codex-hook.sh")
+        let firstInstall = try fixture.readSettings()
+
+        try fixture.provider().install(hookScriptPath: "/tmp/muxy-codex-hook.sh")
+        let secondInstall = try fixture.readSettings()
+
+        #expect(Self.commands(in: secondInstall, event: "UserPromptSubmit") == Self.commands(in: firstInstall, event: "UserPromptSubmit"))
+        #expect(Self.commands(in: secondInstall, event: "PreToolUse") == Self.commands(in: firstInstall, event: "PreToolUse"))
+        #expect(Self.commands(in: secondInstall, event: "PermissionRequest") == Self.commands(in: firstInstall, event: "PermissionRequest"))
+        #expect(Self.commands(in: secondInstall, event: "Stop") == Self.commands(in: firstInstall, event: "Stop"))
     }
 
     @Test("uninstall removes Muxy hooks and preserves colocated user hook")
@@ -110,6 +140,36 @@ struct CodexProviderTests {
                         ],
                     ],
                 ],
+                "UserPromptSubmit": [
+                    [
+                        "hooks": [
+                            [
+                                "type": "command",
+                                "command": "'/tmp/muxy-codex-hook.sh' user-prompt-submit # muxy-notification-hook",
+                            ],
+                        ],
+                    ],
+                ],
+                "PreToolUse": [
+                    [
+                        "hooks": [
+                            [
+                                "type": "command",
+                                "command": "'/tmp/muxy-codex-hook.sh' pre-tool-use # muxy-notification-hook",
+                            ],
+                        ],
+                    ],
+                ],
+                "PermissionRequest": [
+                    [
+                        "hooks": [
+                            [
+                                "type": "command",
+                                "command": "'/tmp/muxy-codex-hook.sh' permission-request # muxy-notification-hook",
+                            ],
+                        ],
+                    ],
+                ],
                 "Notification": [
                     [
                         "hooks": [
@@ -127,6 +187,9 @@ struct CodexProviderTests {
         let settings = try fixture.readSettings()
 
         #expect(Self.commands(in: settings, event: "Stop") == ["/usr/bin/true"])
+        #expect(Self.commands(in: settings, event: "UserPromptSubmit").isEmpty)
+        #expect(Self.commands(in: settings, event: "PreToolUse").isEmpty)
+        #expect(Self.commands(in: settings, event: "PermissionRequest").isEmpty)
         #expect(Self.commands(in: settings, event: "Notification").isEmpty)
     }
 
@@ -185,13 +248,21 @@ struct CodexProviderTests {
     }
 
     private static func commands(in settings: [String: Any], event: String) -> [String] {
+        hooks(in: settings, event: event).compactMap { $0["command"] as? String }
+    }
+
+    private static func timeouts(in settings: [String: Any], event: String) -> [Int] {
+        hooks(in: settings, event: event).compactMap { ($0["timeout"] as? NSNumber)?.intValue }
+    }
+
+    private static func hooks(in settings: [String: Any], event: String) -> [[String: Any]] {
         guard let hooks = settings["hooks"] as? [String: Any],
               let entries = hooks[event] as? [[String: Any]]
         else { return [] }
 
-        return entries.reduce(into: [String]()) { commands, entry in
-            guard let hooks = entry["hooks"] as? [[String: Any]] else { return }
-            commands.append(contentsOf: hooks.compactMap { $0["command"] as? String })
+        return entries.reduce(into: [[String: Any]]()) { result, entry in
+            guard let entryHooks = entry["hooks"] as? [[String: Any]] else { return }
+            result.append(contentsOf: entryHooks)
         }
     }
 }
