@@ -421,6 +421,8 @@ struct ExpandedProjectRow: View {
             ProjectGroupMembershipMenu(project: project)
         }
         Divider()
+        ProjectPathContextMenu(path: project.path)
+        Divider()
         Button("Remove Project", role: .destructive, action: onRemove)
     }
 

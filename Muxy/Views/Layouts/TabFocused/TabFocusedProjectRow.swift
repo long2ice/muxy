@@ -237,6 +237,8 @@ struct TabFocusedProjectRow: View {
             ProjectGroupMembershipMenu(project: project)
         }
         Divider()
+        ProjectPathContextMenu(path: project.path)
+        Divider()
         Button("Remove Project", role: .destructive) { projectPendingRemoval = true }
     }
 

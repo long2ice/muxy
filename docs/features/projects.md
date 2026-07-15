@@ -40,6 +40,7 @@ Right‑click a project in the sidebar:
 - **Set Logo...** — use a cropped image as the project icon.
 - **Set Icon Color...** — choose the fallback letter badge color.
 - **Rename Project** — display name only; doesn't move the folder.
+- **Copy Path** — copies the absolute project path.
 - **Remove** — removes from Muxy; folder on disk is left alone.
 
 ## Switching projects
