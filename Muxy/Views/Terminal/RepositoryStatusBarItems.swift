@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct TabFocusedRepositoryToolbar: View {
+struct RepositoryStatusBarItems: View {
     @Environment(AppState.self) private var appState
     @Environment(ProjectStore.self) private var projectStore
     @Environment(WorktreeStore.self) private var worktreeStore
@@ -14,14 +14,16 @@ struct TabFocusedRepositoryToolbar: View {
     @State private var installedProviderIDs: Set<String> = []
     @State private var aiActions = RepositoryAIActionsService.shared
     @State private var preparingPullRequestRepositoryID: String?
+    @State private var pendingAIAction: RepositoryAIActionConfirmation?
     @AppStorage(RepositoryAIAction.commit.providerKey) private var commitProviderID = RepositoryAIActionPreferences.automaticProviderID
     @AppStorage(RepositoryAIAction.createPullRequest.providerKey) private var pullRequestProviderID = RepositoryAIActionPreferences
         .automaticProviderID
 
     var body: some View {
         let context = repositoryContext
+        let confirmationContext = aiRepositoryActionContext(for: context)
         return content(hasRepository: context != nil)
-            .frame(height: UIMetrics.scaled(32))
+            .frame(maxHeight: .infinity)
             .task(id: context?.id ?? "no-repository") {
                 guard let context else {
                     repositoryState.deactivate()
@@ -62,20 +64,50 @@ struct TabFocusedRepositoryToolbar: View {
             .onChange(of: showChangesPopover) { _, isShowing in
                 repositoryState.setChangesMonitoring(isShowing)
             }
+            .onChange(of: confirmationContext) { _, _ in
+                pendingAIAction = nil
+            }
+            .alert(
+                pendingAIAction?.title ?? "",
+                isPresented: aiRepositoryActionAlertBinding,
+                presenting: pendingAIAction
+            ) { confirmation in
+                Button(confirmation.confirmTitle) {
+                    pendingAIAction = nil
+                    confirmAIRepositoryAction(confirmation)
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Cancel", role: .cancel) {
+                    pendingAIAction = nil
+                }
+                .keyboardShortcut(.cancelAction)
+            } message: { confirmation in
+                Text(confirmation.message)
+            }
+    }
+
+    private var aiRepositoryActionAlertBinding: Binding<Bool> {
+        Binding(
+            get: { pendingAIAction != nil },
+            set: { newValue in
+                if !newValue {
+                    pendingAIAction = nil
+                }
+            }
+        )
     }
 
     @ViewBuilder
     private func content(hasRepository: Bool) -> some View {
         if hasRepository {
-            HStack(spacing: UIMetrics.spacing3) {
+            HStack(spacing: UIMetrics.spacing4) {
                 branchChip(repositoryState.summary)
-                toolbarSeparator
+                statusBarSeparator
                 changesChip(repositoryState.summary)
-                toolbarSeparator
+                statusBarSeparator
                 aiRepositoryAction(.commit, summary: repositoryState.summary, providerID: $commitProviderID)
                 repositoryResultContent
             }
-            .padding(.leading, UIMetrics.spacing6)
         }
     }
 
@@ -86,29 +118,27 @@ struct TabFocusedRepositoryToolbar: View {
             case .loading:
                 EmptyView()
             case .noPullRequest:
-                toolbarSeparator
+                statusBarSeparator
                 aiRepositoryAction(
                     .createPullRequest,
                     summary: summary,
                     providerID: $pullRequestProviderID
                 )
             case .unavailable:
-                toolbarSeparator
+                statusBarSeparator
                 pullRequestUnavailableChip
             case let .found(info):
-                toolbarSeparator
+                statusBarSeparator
                 pullRequestChip(info)
             }
         } else if let error = repositoryState.summaryError {
-            toolbarSeparator
+            statusBarSeparator
             repositoryUnavailableChip(error)
         }
     }
 
-    private var toolbarSeparator: some View {
-        Divider()
-            .overlay(MuxyTheme.border)
-            .frame(height: UIMetrics.scaled(16))
+    private var statusBarSeparator: some View {
+        StatusBarSeparator()
     }
 
     private func repositoryUnavailableChip(_ error: String) -> some View {
@@ -171,7 +201,7 @@ struct TabFocusedRepositoryToolbar: View {
         )
         .help(summary.map(branchHelp) ?? "Loading repository status")
         .accessibilityLabel(summary.map(branchHelp) ?? "Loading repository status")
-        .popover(isPresented: $showBranchPopover, arrowEdge: .top) {
+        .popover(isPresented: $showBranchPopover, arrowEdge: .bottom) {
             if let summary {
                 TabFocusedBranchPopover(
                     summary: repositoryState.summary ?? summary,
@@ -226,7 +256,7 @@ struct TabFocusedRepositoryToolbar: View {
         )
         .help(summary.map(workingTreeHelp) ?? "Loading working tree status")
         .accessibilityLabel(summary.map(workingTreeHelp) ?? "Loading working tree status")
-        .popover(isPresented: $showChangesPopover, arrowEdge: .top) {
+        .popover(isPresented: $showChangesPopover, arrowEdge: .bottom) {
             if let summary {
                 TabFocusedChangesPopover(
                     summary: repositoryState.summary ?? summary,
@@ -333,7 +363,7 @@ struct TabFocusedRepositoryToolbar: View {
         )
         .help("Pull request #\(info.number) · \(PullRequestPresentation.stateLabel(for: info))")
         .accessibilityLabel("Pull request #\(info.number), \(PullRequestPresentation.stateLabel(for: info))")
-        .popover(isPresented: $showPullRequestPopover, arrowEdge: .top) {
+        .popover(isPresented: $showPullRequestPopover, arrowEdge: .bottom) {
             if let context = pullRequestActionContext(for: repositoryState.pullRequest ?? info) {
                 TabFocusedPullRequestPopover(
                     confirmationContext: context,
@@ -383,7 +413,7 @@ struct TabFocusedRepositoryToolbar: View {
             menuDisabled: hasRunningAIWorkflow,
             configuredProviderID: providerID,
             projectPrompt: projectPromptConfiguration(for: action),
-            onRun: { runAIRepositoryAction(action, availability: availability) }
+            onRun: { requestAIRepositoryAction(action, availability: availability) }
         )
     }
 
@@ -637,6 +667,47 @@ struct TabFocusedRepositoryToolbar: View {
     private func refreshInstalledProviders() async {
         await LoginShellPath.hydrate()
         installedProviderIDs = Set(agentLaunchProviders.filter { $0.isAgentCLIInstalled() }.map(\.id))
+    }
+
+    private func aiRepositoryActionContext(
+        for context: RepositoryContext?
+    ) -> RepositoryAIActionConfirmation.Context? {
+        guard let context,
+              let summary = repositoryState.summary
+        else { return nil }
+        return RepositoryAIActionConfirmation.Context(
+            repositoryID: context.id,
+            branch: summary.branch
+        )
+    }
+
+    private func requestAIRepositoryAction(
+        _ action: RepositoryAIAction,
+        availability: RepositoryAIActionAvailability
+    ) {
+        guard availability == .available,
+              !hasRunningAIWorkflow,
+              let context = aiRepositoryActionContext(for: repositoryContext),
+              let provider = selectedProvider(for: action)
+        else { return }
+        pendingAIAction = RepositoryAIActionConfirmation(
+            action: action,
+            context: context,
+            providerName: provider.displayName
+        )
+    }
+
+    private func confirmAIRepositoryAction(_ confirmation: RepositoryAIActionConfirmation) {
+        let action = confirmation.action
+        let availability = aiRepositoryActionAvailability(action, summary: repositoryState.summary)
+        guard availability == .available,
+              !hasRunningAIWorkflow,
+              aiRepositoryActionContext(for: repositoryContext) == confirmation.context
+        else {
+            ToastState.shared.show("\(action.settingsTitle) is no longer available. Try again.")
+            return
+        }
+        runAIRepositoryAction(action, availability: availability)
     }
 
     private func runAIRepositoryAction(
