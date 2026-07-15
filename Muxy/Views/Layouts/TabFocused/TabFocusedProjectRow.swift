@@ -138,7 +138,13 @@ struct TabFocusedProjectRow: View {
             if let worktree {
                 worktreeContextMenu(worktree)
             } else if project.isHome {
-                Button("Hide Home") { HomeProjectPreferences.isVisible = false }
+                ProjectContextMenuFooter(
+                    path: project.path,
+                    workspaceContext: projectGroupStore.workspaceContext(for: project),
+                    separatesFromPreviousActions: false
+                ) {
+                    Button("Hide Home") { HomeProjectPreferences.isVisible = false }
+                }
             } else {
                 projectContextMenu
             }
@@ -236,10 +242,12 @@ struct TabFocusedProjectRow: View {
             Divider()
             ProjectGroupMembershipMenu(project: project)
         }
-        Divider()
-        ProjectPathContextMenu(path: project.path)
-        Divider()
-        Button("Remove Project", role: .destructive) { projectPendingRemoval = true }
+        ProjectContextMenuFooter(
+            path: project.path,
+            workspaceContext: projectGroupStore.workspaceContext(for: project)
+        ) {
+            Button("Remove Project", role: .destructive) { projectPendingRemoval = true }
+        }
     }
 
     private var worktreesEnabledBinding: Binding<Bool> {
